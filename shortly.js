@@ -1,3 +1,4 @@
+var envir = require('./env');
 var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
@@ -12,6 +13,7 @@ var Click = require('./app/models/click');
 var session = require('express-session');
 var pp = require('passport');
 var localStgy = require('passport-local').Strategy;
+var gitHubStrategy = require('passport-github').Strategy;
 
 /************************************************************/
 // passport configuration
@@ -46,6 +48,24 @@ pp.use(new localStgy(function(username, password, done) {
     });
   });
 }));
+
+/************************************************************/
+// github oauth2 configuration
+/************************************************************/
+
+var options = {
+  clientID: envir.githubClientId,
+  clientSecret: envir.githubClientSecret,
+  callbackURL: "http://localhost:4568/auth/github/cb"
+};
+
+var handler = function(accessToken, refreshToken, profile, done) {
+  process.nextTick(function() {
+    return done(null, profile);
+  });
+};
+
+pp.use(new gitHubStrategy(options, handler));
 
 /************************************************************/
 // app configuration
@@ -170,6 +190,28 @@ app.get('/logout', function(req, res) {
   req.session.destroy();
   res.redirect('/');
 });
+
+app.get('/github-login', pp.authenticate('github'));
+
+app.get('/auth/github/cb',
+  pp.authenticate('github',
+  { failureRedirect: '/login' }),
+  function(req, res) {
+    new User({ githubId: req.user.id }).fetch().then(function(user) {
+      if (!user) {
+        var newUser = new User({
+          username: req.user.login,
+          password: req.user.id
+        });
+        newUser.save().then(function(userObj) {
+          util.makeSesh(req, res, userObj);
+        });
+      } else {
+        util.makeSesh(req, res, user);
+      }
+    });
+  }
+);
 
 /************************************************************/
 // If all other routes fail assume the route is a short code

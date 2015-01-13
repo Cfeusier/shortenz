@@ -7,3 +7,4 @@ node_modules
 .floobit
 .floo
 .flooignore
+env.js
