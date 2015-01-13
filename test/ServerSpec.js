@@ -1,6 +1,5 @@
 var expect = require('chai').expect;
 var request = require('request');
-
 var db = require('../app/config');
 var Users = require('../app/collections/users');
 var User = require('../app/models/user');
@@ -285,7 +284,7 @@ describe('', function() {
 
   }); // 'Account Creation'
 
-  xdescribe('Account Login:', function(){
+  describe('Account Login:', function(){
 
     var requestWithSession = request.defaults({jar: true});
 
