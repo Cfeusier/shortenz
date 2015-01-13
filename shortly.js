@@ -77,7 +77,29 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
+app.get('/signup',
+function(req, res) {
+  res.render('signup');
+});
 
+app.post('/signup',
+function(req, res) {
+  var user = new User({ username: req.body.username, password: req.body.password });
+
+  user.save().then(function(u) {
+    // set session to userid
+    Users.add(u);
+    res.redirect('/');
+  });
+
+  // req.session.regenerate(function(){
+  //   req.session.user = user.username;
+  //   res.redirect('/');
+  // });
+
+  // res.redirect('login');
+
+});
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
