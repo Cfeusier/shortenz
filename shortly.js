@@ -10,12 +10,48 @@ var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 var session = require('express-session');
+var pp = require('passport');
+var localStgy = require('passport-local').Strategy;
 
-var app = express();
+/************************************************************/
+// passport configuration
+/************************************************************/
+
+pp.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+pp.deserializeUser(function(id, done) {
+  new User({ id: id }).fetch().then(function(user) {
+    if (!user) {
+      done(null, false, { message: "Invalid Username or Password" });
+    } else {
+      done(null, user);
+    }
+  });
+});
+
+pp.use(new localStgy(function(username, password, done) {
+  new User({ username: username }).fetch().then(function(user) {
+    if (!user) {
+      return done(null, false, { message: "Invalid Username or Password" });
+    }
+
+    user.comparePassword(password, function(valid) {
+      if (valid) {
+        return done(null, user);
+      } else {
+        return done(null, false, { message: "Invalid Username or Password" });
+      }
+    });
+  });
+}));
 
 /************************************************************/
 // app configuration
 /************************************************************/
+
+var app = express();
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -28,13 +64,15 @@ app.use(session({
   resave: false,
   saveUninitialized: true
 }));
+app.use(pp.initialize());
+app.use(pp.session());
 
 /************************************************************/
 // protected routes
 /************************************************************/
 
 app.get('/', util.checkUser, function(req, res) {
-  res.render('index');
+  res.render('index', { user: req.user });
 });
 
 app.get('/create', util.checkUser, function(req, res) {
@@ -85,7 +123,7 @@ app.post('/links', util.checkUser, function(req, res) {
 /************************************************************/
 
 app.get('/signup', function(req, res) {
-  res.render('signup');
+  res.render('signup', { message: req.session.messages });
 });
 
 app.post('/signup', function(req, res) {
@@ -102,41 +140,39 @@ app.post('/signup', function(req, res) {
         util.makeSesh(req, res, userObj);
       });
     } else {
-      console.log("already an account with that username");
+      req.session.messages = ["Username is already taken"];
       res.redirect('/signup');
     }
   });
 });
 
 app.get('/login', function(req, res) {
-  res.render('login')
-});
-
-app.post('/login', function(req, res) {
-  var username = req.body.username;
-  var strPass = req.body.password;
-
-  new User({ username: username }).fetch().then(function(user) {
-    if (!user) {
-      return res.redirect('/login');
-    }
-    user.comparePassword(strPass, function(valid) {
-      if (valid) {
-        util.makeSesh(req, res, user);
-      } else {
-        res.redirect('/login');
-      }
-    });
+  res.render('login', {
+    user: req.user, message: req.session.messages
   });
 });
 
+app.post('/login', function(req, res, next) {
+  pp.authenticate('local', function(err, user, info) {
+    if (err) return next(err);
+    if (!user) {
+      req.session.messages = [info.message];
+      return res.redirect('/login');
+    }
+    req.login(user, function(err) {
+      if (err) return next(err);
+      util.makeSesh(req, res, user);
+    });
+  })(req, res, next);
+});
+
 app.get('/logout', function(req, res) {
-  if (util.currentUser(req, res)) req.session.destroy();
-  res.redirect('login');
+  req.session.destroy();
+  res.redirect('/');
 });
 
 /************************************************************/
-// Iif all other routes fail assume the route is a short code
+// If all other routes fail assume the route is a short code
 // and try and handle it here.
 // If the short-code doesn't exist, send the user to '/'
 /************************************************************/
