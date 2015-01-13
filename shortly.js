@@ -2,7 +2,6 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
-var bcrypt = require('bcrypt-nodejs');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -11,14 +10,17 @@ var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 var session = require('express-session');
+
 var app = express();
+
+/************************************************************/
+// app configuration
+/************************************************************/
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
 app.use(partials());
-// Parse JSON (uniform resource locators)
 app.use(bodyParser.json());
-// Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 app.use(session({
@@ -27,21 +29,25 @@ app.use(session({
   saveUninitialized: true
 }));
 
+/************************************************************/
+// protected routes
+/************************************************************/
+
 app.get('/', util.checkUser, function(req, res) {
   res.render('index');
 });
 
-app.get('/create', function(req, res) {
+app.get('/create', util.checkUser, function(req, res) {
   res.render('index');
 });
 
-app.get('/links', function(req, res) {
+app.get('/links', util.checkUser, function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.send(200, links.models);
   });
 });
 
-app.post('/links', function(req, res) {
+app.post('/links', util.checkUser, function(req, res) {
   var uri = req.body.url;
 
   if (!util.isValidUrl(uri)) {
@@ -75,7 +81,7 @@ app.post('/links', function(req, res) {
 });
 
 /************************************************************/
-// Write your authentication routes here
+// authentication routes
 /************************************************************/
 
 app.get('/signup', function(req, res) {
@@ -88,13 +94,12 @@ app.post('/signup', function(req, res) {
 
   new User({ username: username }).fetch().then(function(user) {
     if (!user) {
-      bcrypt.hash(password, null, null, function(err, hashedPass) {
-        Users.create({
-          username: username,
-          password: hashedPass
-        }).then(function(user) {
-          util.makeSesh(req, res, user);
-        });
+      var newUser = new User({
+        username: username,
+        password: password
+      });
+      newUser.save().then(function(userObj) {
+        util.makeSesh(req, res, userObj);
       });
     } else {
       console.log("already an account with that username");
@@ -115,8 +120,8 @@ app.post('/login', function(req, res) {
     if (!user) {
       return res.redirect('/login');
     }
-    bcrypt.compare(strPass, user.get('password'), function(err, result) {
-      if (result) {
+    user.comparePassword(strPass, function(valid) {
+      if (valid) {
         util.makeSesh(req, res, user);
       } else {
         res.redirect('/login');
@@ -125,9 +130,14 @@ app.post('/login', function(req, res) {
   });
 });
 
+app.get('/logout', function(req, res) {
+  if (util.currentUser(req, res)) req.session.destroy();
+  res.redirect('login');
+});
+
 /************************************************************/
-// Handle the wildcard route last - if all other routes fail
-// assume the route is a short code and try and handle it here.
+// Iif all other routes fail assume the route is a short code
+// and try and handle it here.
 // If the short-code doesn't exist, send the user to '/'
 /************************************************************/
 
@@ -136,14 +146,10 @@ app.get('/*', function(req, res) {
     if (!link) {
       res.redirect('/');
     } else {
-      var click = new Click({
-        link_id: link.get('id')
-      });
+      var click = new Click({ link_id: link.get('id') });
 
       click.save().then(function() {
-        db.knex('urls')
-        .where('code', '=', link.get('code'))
-        .update({
+        db.knex('urls').where('code', '=', link.get('code')).update({
           visits: link.get('visits') + 1,
         }).then(function() {
           return res.redirect(link.get('url'));
