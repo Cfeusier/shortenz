@@ -8,11 +8,7 @@ var User = db.Model.extend({
   initialize: function(){
     this.on('creating', function(model, attrs, options) {
       bcrypt.hash(model.get('password'), null, null, function(err, hashedPass) {
-        if (err) {
-          return err;
-        } else {
-          model.set('password', hashedPass);
-        }
+        err ? err : model.set('password', hashedPass);
       });
     });
   }
