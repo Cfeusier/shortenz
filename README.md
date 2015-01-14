@@ -1,2 +1,3 @@
-#shortly-express
-This is a project I completed as a student at [Hack Reactor](http://hackreactor.com). This project was worked on with a pair.
+# Shortenz
+
+This is a project I completed during a two-day sprint while studying at [Hack Reactor](http://hackreactor.com). **Shortenz** was built using Node, Express, SQLite, Backbone, Handlebars, EJS, Passport, Bcrypt, OAuth2, Github API, Bookshelf, Knex, jQuery, and Underscore. The objective of this project was to architect and construct a secure authentication system on top of Node and Express. The link-shortening and user-experience aspects of the project were secondary to the authentication system.
